@@ -1,0 +1,13 @@
+# Spacefile Docs: https://go.deta.dev/docs/spacefile/v0
+v: 0
+micros:
+  - name: chatgpt-telegram-bot
+    src: ./
+    engine: python3.9
+    primary: true
+    include:
+      - bot/
+      - config/
+    commands: 
+      - pip3 install -r requirements.txt
+    run: python3 bot/bot.py
