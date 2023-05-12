@@ -221,7 +221,7 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
 
         try:
             # send placeholder message to user
-            placeholder_message = await update.message.reply_text("Responding...")
+            placeholder_message = await update.message.reply_text("thinking ...")
 
             # send typing action
             await update.message.chat.send_action(action="typing")
@@ -446,16 +446,16 @@ def get_chat_mode_menu(page_index: int):
 
         if is_first_page:
             keyboard.append([
-                InlineKeyboardButton("»", callback_data=f"show_chat_modes|{page_index + 1}")
+                InlineKeyboardButton(">>", callback_data=f"show_chat_modes|{page_index + 1}")
             ])
         elif is_last_page:
             keyboard.append([
-                InlineKeyboardButton("«", callback_data=f"show_chat_modes|{page_index - 1}"),
+                InlineKeyboardButton("<<", callback_data=f"show_chat_modes|{page_index - 1}"),
             ])
         else:
             keyboard.append([
-                InlineKeyboardButton("«", callback_data=f"show_chat_modes|{page_index - 1}"),
-                InlineKeyboardButton("»", callback_data=f"show_chat_modes|{page_index + 1}")
+                InlineKeyboardButton("<<", callback_data=f"show_chat_modes|{page_index - 1}"),
+                InlineKeyboardButton(">>", callback_data=f"show_chat_modes|{page_index + 1}")
             ])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
