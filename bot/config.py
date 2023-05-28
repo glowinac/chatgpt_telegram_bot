@@ -1,3 +1,4 @@
+import os
 import yaml
 import dotenv
 from pathlib import Path
@@ -9,18 +10,20 @@ with open(config_dir / "config.yml", 'r') as f:
     config_yaml = yaml.safe_load(f)
 
 # load .env config
-config_env = dotenv.dotenv_values(config_dir / "config.env")
+# config_env = dotenv.dotenv_values(config_dir / "config.env")
+dotenv.load_dotenv(config_dir / "config.env")
 
 # config parameters
-telegram_token = config_yaml["telegram_token"]
-openai_api_key = config_yaml["openai_api_key"]
+telegram_token = os.getenv("TELEGRAM_TOKEN")
+openai_api_key = os.getenv("OPENAI_API_KEY")
 use_chatgpt_api = config_yaml.get("use_chatgpt_api", True)
 allowed_telegram_usernames = config_yaml["allowed_telegram_usernames"]
 new_dialog_timeout = config_yaml["new_dialog_timeout"]
 enable_message_streaming = config_yaml.get("enable_message_streaming", True)
 return_n_generated_images = config_yaml.get("return_n_generated_images", 1)
 n_chat_modes_per_page = config_yaml.get("n_chat_modes_per_page", 5)
-mongodb_uri = config_yaml["mongo_connect_string"]
+n_update_chunk_symbols = config_yaml.get("n_update_chunk_symbols", 50)
+mongodb_uri = os.getenv("MONGO_CONNECT_STRING")
 #mongodb_uri = f"mongodb://mongo:{config_env['MONGODB_PORT']}"
 
 # chat_modes

@@ -43,9 +43,10 @@ user_semaphores = {}
 user_tasks = {}
 
 HELP_MESSAGE = """Commands:
-⚪ /retry – Regenerate last bot answer
 ⚪ /new – Start new dialog
 ⚪ /mode – Select chat mode
+⚪ /retry – Regenerate last bot answer
+⚪ /cancel – Cancel reply
 ⚪ /settings – Show settings
 ⚪ /balance – Show balance
 ⚪ /help – Show help
@@ -257,8 +258,9 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
 
                 answer = answer[:4096]  # telegram message limit
 
-                # update only when 100 new symbols are ready
-                if abs(len(answer) - len(prev_answer)) < 100 and status != "finished":
+                # update only when n_update_chunk_symbols new symbols are ready
+                n_update_chunk_symbols = config.n_update_chunk_symbols
+                if abs(len(answer) - len(prev_answer)) < n_update_chunk_symbols and status != "finished":
                     continue
 
                 try:
@@ -428,7 +430,8 @@ async def cancel_handle(update: Update, context: CallbackContext):
 
 def get_chat_mode_menu(page_index: int):
     n_chat_modes_per_page = config.n_chat_modes_per_page
-    text = f"Select <b>chat mode</b> ({len(config.chat_modes)} modes available):"
+    # text = f"Select <b>chat mode</b> ({len(config.chat_modes)} modes available):"
+    text = f"Select <b>chat mode</b>"
 
     # buttons
     chat_mode_keys = list(config.chat_modes.keys())
