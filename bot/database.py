@@ -53,7 +53,7 @@ class Database:
             "n_generated_images": 0,
             "n_transcribed_seconds": 0.0,  # voice message transcription
 
-            "chat_modes": {}
+            "chat_modes": config.get_default_chat_modes()
         }
 
         if not self.check_if_user_exists(user_id):
@@ -100,12 +100,6 @@ class Database:
         self.check_if_user_exists(user_id, raise_exception=True)
         chat_modes_dict = self.get_user_attribute(user_id, "chat_modes")
         self.user_collection.insert_one({"_id": user_id}, )
-    
-    def load_default_chat_modes(self, user_id: int):
-        self.check_if_user_exists(user_id, raise_exception=True)
-        self.user_collection.update_one(
-            {"_id": user_id}, 
-        )
 
     def update_n_used_tokens(self, user_id: int, model: str, n_input_tokens: int, n_output_tokens: int):
         n_used_tokens_dict = self.get_user_attribute(user_id, "n_used_tokens")

@@ -114,7 +114,8 @@ async def register_user_if_not_exists(update: Update, context: CallbackContext, 
 
     # back compatibility for chat_modes
     if db.get_user_attribute(user.id, "chat_modes") is None:
-        db.set_user_attribute(user.id, "chat_modes", )
+        print("load_default_chat_modes")
+        db.set_user_attribute(user.id, "chat_modes", config.get_default_chat_modes())
 
 
 async def is_bot_mentioned(update: Update, context: CallbackContext):
