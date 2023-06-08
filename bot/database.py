@@ -46,6 +46,7 @@ class Database:
 
             "current_dialog_id": None,
             "current_chat_mode": "assistant",
+            "current_chat_mode_index": 0,
             "current_model": config.models["available_text_models"][0],
 
             "n_used_tokens": {},
@@ -100,6 +101,11 @@ class Database:
         self.check_if_user_exists(user_id, raise_exception=True)
         chat_modes_dict = self.get_user_attribute(user_id, "chat_modes")
         self.user_collection.insert_one({"_id": user_id}, )
+
+    def get_chat_modes(self, user_id: int):
+        self.check_if_user_exists(user_id, raise_exception=True)
+        chat_modes_dict = self.get_user_attribute(user_id, "chat_modes")
+        return chat_modes_dict
 
     def update_n_used_tokens(self, user_id: int, model: str, n_input_tokens: int, n_output_tokens: int):
         n_used_tokens_dict = self.get_user_attribute(user_id, "n_used_tokens")
