@@ -198,6 +198,11 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
     if update.edited_message is not None:
         await edited_message_handle(update, context)
         return
+    
+    # check if it's in a command conversation
+    if is_in_command_conversation(update, context):
+        await new_mode_callback_handle(update, context)
+        return
 
     _message = message or update.message.text
 
@@ -308,7 +313,7 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
         # send message if some messages were removed from the context
         if n_first_dialog_messages_removed > 0:
             if n_first_dialog_messages_removed == 1:
-                text = "✍️ <i>Note:</i> Your current dialog is too long, so your <b>first message</b> was removed from the context.\n Send /new command to start new dialog"
+                text = "✍️ <i>Note:</i> Your current dialog is too long, so your <b>first message</b> was removed from the context.\nSend /new command to start new dialog"
             else:
                 text = f"✍️ <i>Note:</i> Your current dialog is too long, so <b>{n_first_dialog_messages_removed} first messages</b> were removed from the context.\n Send /new command to start new dialog"
             await update.message.reply_text(text, parse_mode=ParseMode.HTML)
@@ -396,7 +401,7 @@ async def generate_image_handle(update: Update, context: CallbackContext, messag
         image_urls = await openai_utils.generate_images(message, n_images=config.return_n_generated_images)
     except openai.error.InvalidRequestError as e:
         if str(e).startswith("Your request was rejected as a result of our safety system"):
-            text = "🥲 Your request <b>doesn't comply</b> with OpenAI's usage policies.\nWhat did you write there, huh?"
+            text = "🥲 Your request <b>doesn't comply</b> with OpenAI's usage policies."
             await update.message.reply_text(text, parse_mode=ParseMode.HTML)
             return
         else:
@@ -433,13 +438,17 @@ async def cancel_handle(update: Update, context: CallbackContext):
     if user_id in user_tasks:
         task = user_tasks[user_id]
         task.cancel()
+    elif is_in_command_conversation(update, context):
+        context.user_data.clear()
+        await update.message.reply_text("✅ Canceled", parse_mode=ParseMode.HTML)
     else:
         await update.message.reply_text("<i>Nothing to cancel...</i>", parse_mode=ParseMode.HTML)
 
 
 def get_chat_mode_menu(user_id: int, page_index: int):
     n_chat_modes_per_page = config.n_chat_modes_per_page
-    text = f"Select <b>chat mode</b>"
+    current_mode = db.get_user_attribute(user_id, "current_chat_mode")
+    text = f"Current mode: <b>{current_mode}</b> \nSelect <b>chat mode</b> from below \nYou can also /add, /edit or /delete a chat mode"
 
     # buttons
     chat_modes = db.get_chat_modes(user_id)
@@ -526,6 +535,56 @@ async def set_chat_mode_handle(update: Update, context: CallbackContext):
         f"{chat_modes[chat_mode_index]['welcome_message']}",
         parse_mode=ParseMode.HTML
     )
+
+
+def is_in_command_conversation(update: Update, context: CallbackContext):
+    if 'add_mode_state' in context.user_data:
+        if context.user_data['add_mode_state']:
+            return True
+        else:
+            return False
+    else:
+        return False
+
+
+async def add_mode_handle(update: Update, context: CallbackContext):
+    # await register_user_if_not_exists(update, context, update.message.from_user)
+    # user_id = update.message.from_user.id
+    text = "What is the <b>name</b> for the new mode?"
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+    context.user_data['add_mode_state'] = 'mode_name'
+
+
+async def new_mode_callback_handle(update: Update, context: CallbackContext):
+    await register_user_if_not_exists(update, context, update.message.from_user)
+    user_id = update.message.from_user.id
+
+    if context.user_data['add_mode_state'] is 'mode_name':
+        context.user_data['mode_name'] = update.message.text
+        mode_name = context.user_data['mode_name']
+
+        print("mode name:", mode_name)
+
+        text = f"What is the <b>prompt</b> for {mode_name}?"
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+        context.user_data['add_mode_state'] = "mode_prompt"
+        return
+    
+    elif context.user_data['add_mode_state'] is "mode_prompt":
+        context.user_data['mode_prompt'] = update.message.text
+        mode_prompt = context.user_data['mode_prompt']
+
+        print("mode prompt:", mode_prompt)
+
+        text = f"{mode_name} has been added to the modes list"
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+        context.user_data.clear()
+        return
+    else: 
+        return
 
 
 def get_settings_menu(user_id: int):
@@ -664,13 +723,14 @@ async def error_handle(update: Update, context: CallbackContext) -> None:
 
 async def post_init(application: Application):
     await application.bot.set_my_commands([
-        BotCommand("/new", "Start new dialog"),
-        BotCommand("/mode", "Select chat mode"),
-        BotCommand("/retry", "Re-generate response for previous query"),
-        BotCommand("/cancel", "Cancel reply"),
-        BotCommand("/balance", "Show balance"),
-        BotCommand("/settings", "Show settings"),
-        BotCommand("/help", "Show help message"),
+        BotCommand("/new", "start new dialog"),
+        BotCommand("/mode", "select a chat mode"),
+        BotCommand("/add", "add a chat mode"),
+        BotCommand("/retry", "regenerate response for the previous query"),
+        BotCommand("/cancel", "cancel reply"),
+        BotCommand("/balance", "show balance"),
+        BotCommand("/settings", "show settings"),
+        BotCommand("/help", "show help message"),
     ])
 
 def run_bot() -> None:
@@ -704,6 +764,8 @@ def run_bot() -> None:
     application.add_handler(CommandHandler("mode", show_chat_modes_handle, filters=user_filter))
     application.add_handler(CallbackQueryHandler(show_chat_modes_callback_handle, pattern="^show_chat_modes"))
     application.add_handler(CallbackQueryHandler(set_chat_mode_handle, pattern="^set_chat_mode"))
+
+    application.add_handler(CommandHandler("add", add_mode_handle, filters=user_filter))
 
     application.add_handler(CommandHandler("settings", settings_handle, filters=user_filter))
     application.add_handler(CallbackQueryHandler(set_settings_handle, pattern="^set_settings"))
