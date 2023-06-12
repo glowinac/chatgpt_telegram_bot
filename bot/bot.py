@@ -226,7 +226,7 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
         if use_new_dialog_timeout:
             if (datetime.now() - db.get_user_attribute(user_id, "last_interaction")).seconds > config.new_dialog_timeout and len(db.get_dialog_messages(user_id)) > 0:
                 db.start_new_dialog(user_id)
-                await update.message.reply_text(f"Starting new dialog due to timeout (<b>{config.get_chat_modes(user_id)[chat_mode_index]['name']}</b> mode) ✅", parse_mode=ParseMode.HTML)
+                await update.message.reply_text(f"Starting new dialog due to timeout (<b>{db.get_chat_modes(user_id)[chat_mode_index]['name']}</b> mode) ✅", parse_mode=ParseMode.HTML)
         db.set_user_attribute(user_id, "last_interaction", datetime.now())
 
         # in case of CancelledError
@@ -548,8 +548,7 @@ def is_in_command_conversation(update: Update, context: CallbackContext):
 
 
 async def add_mode_handle(update: Update, context: CallbackContext):
-    # await register_user_if_not_exists(update, context, update.message.from_user)
-    # user_id = update.message.from_user.id
+    await register_user_if_not_exists(update, context, update.message.from_user)
     text = "What is the <b>name</b> for the new mode?"
     await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
@@ -557,16 +556,10 @@ async def add_mode_handle(update: Update, context: CallbackContext):
 
 
 async def new_mode_callback_handle(update: Update, context: CallbackContext):
-    await register_user_if_not_exists(update, context, update.message.from_user)
-    user_id = update.message.from_user.id
-
     if context.user_data['add_mode_state'] is 'mode_name':
         context.user_data['mode_name'] = update.message.text
-        mode_name = context.user_data['mode_name']
 
-        print("mode name:", mode_name)
-
-        text = f"What is the <b>prompt</b> for {mode_name}?"
+        text = f"What is the <b>prompt</b> for {context.user_data['mode_name']}?"
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
         context.user_data['add_mode_state'] = "mode_prompt"
@@ -574,11 +567,21 @@ async def new_mode_callback_handle(update: Update, context: CallbackContext):
     
     elif context.user_data['add_mode_state'] is "mode_prompt":
         context.user_data['mode_prompt'] = update.message.text
-        mode_prompt = context.user_data['mode_prompt']
+            
+        user_id = update.message.from_user.id
+        chat_modes = db.get_chat_modes(user_id)
 
-        print("mode prompt:", mode_prompt)
+        new_chat_mode = {
+            "name": f"👩🏼‍🎓 {context.user_data['mode_name']}",
+            "welcome_message": f"👩🏼‍🎓 Hi, I'm <b>{context.user_data['mode_name']}</b>. How can I help you?",
+            "prompt_start": context.user_data['mode_prompt'],
+            "parse_mode": "html",
+        }
 
-        text = f"{mode_name} has been added to the modes list"
+        chat_modes += [new_chat_mode]
+        db.set_user_attribute(user_id, "chat_modes", chat_modes)
+
+        text = f"{context.user_data['mode_name']} has been added to the modes list"
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
         context.user_data.clear()
