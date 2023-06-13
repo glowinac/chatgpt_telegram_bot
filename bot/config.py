@@ -4,6 +4,7 @@ import dotenv
 from pathlib import Path
 
 config_dir = Path(__file__).parent.parent.resolve() / "config"
+chat_modes = {}
 
 # load yaml config
 with open(config_dir / "config.yml", 'r') as f:
@@ -29,6 +30,20 @@ mongodb_uri = os.getenv("MONGO_CONNECT_STRING")
 # chat_modes
 with open(config_dir / "chat_modes.yml", 'r') as f:
     chat_modes = yaml.safe_load(f)
+
+def get_default_chat_modes():
+    default_chat_modes = []
+
+    for chat_mode in chat_modes.keys():   
+        new_chat_mode = {
+            "name": chat_modes[chat_mode]["name"],
+            "welcome_message": chat_modes[chat_mode]["welcome_message"],
+            "prompt_start": chat_modes[chat_mode]["prompt_start"],
+            "parse_mode": chat_modes[chat_mode]["parse_mode"]
+        }
+        default_chat_modes += [new_chat_mode]
+
+    return default_chat_modes
 
 # models
 with open(config_dir / "models.yml", 'r') as f:
