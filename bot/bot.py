@@ -202,9 +202,12 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
     # check if it's in a command conversation
     if is_in_command_conversation(update, context):
         if 'add_mode_state' in context.user_data:
-            await new_chat_mode_callback_handle(update, context)
+            await add_chat_mode_callback_handle(update, context)
             return
-        elif 'delete_mode_state' in context.user_data:
+        elif 'edit_mode_state' in context.user_data and 'mode_index_to_edit' in context.user_data:
+            await edit_chat_mode_content_handle(update, context)
+            return
+        elif 'delete_mode_state' in context.user_data and 'mode_index_to_delete' in context.user_data:
             await delete_chat_mode_confirm_handle(update, context)
             return
     _message = message or update.message.text
@@ -220,7 +223,7 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
     chat_mode = db.get_user_attribute(user_id, "current_chat_mode")
     chat_mode_index = db.get_user_attribute(user_id, "current_chat_mode_index")
 
-    if chat_mode == "artist":
+    if chat_mode == "👩‍🎨 Artist":
         await generate_image_handle(update, context, message=message)
         return
 
@@ -555,6 +558,8 @@ def is_in_command_conversation(update: Update, context: CallbackContext):
         return True
     elif 'delete_mode_state' in context.user_data:
         return True
+    elif 'edit_mode_state' in context.user_data:
+        return True
     else:
         return False
 
@@ -571,7 +576,7 @@ async def add_chat_mode_handle(update: Update, context: CallbackContext):
     context.user_data['add_mode_state'] = 'mode_name'
 
 
-async def new_chat_mode_callback_handle(update: Update, context: CallbackContext):
+async def add_chat_mode_callback_handle(update: Update, context: CallbackContext):
     user_id = update.message.from_user.id
     db.set_user_attribute(user_id, "last_interaction", datetime.now())
 
@@ -600,6 +605,101 @@ async def new_chat_mode_callback_handle(update: Update, context: CallbackContext
 
         text = f"👩🏼‍🎓 {context.user_data['mode_name']} has been added to the modes list"
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+        db.set_user_attribute(user_id, "current_chat_mode", f"👩🏼‍🎓 {context.user_data['mode_name']}")
+
+        new_chat_mode_index = len(chat_modes)-1
+        db.set_user_attribute(user_id, "current_chat_mode_index", new_chat_mode_index) 
+
+        db.start_new_dialog(user_id)
+
+        text = f"{chat_modes[new_chat_mode_index]['welcome_message']}"
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+        context.user_data.clear()
+        return
+    else: 
+        return
+    
+
+async def edit_chat_mode_handle(update: Update, context: CallbackContext):
+    await register_user_if_not_exists(update, context, update.message.from_user)
+    if await is_previous_message_not_answered_yet(update, context): return
+
+    user_id = update.message.from_user.id
+    db.set_user_attribute(user_id, "last_interaction", datetime.now())
+
+    context.user_data['edit_mode_state'] = "mode_name"
+
+    text, reply_markup = get_chat_mode_menu(user_id, 0, "edit_chat_mode")
+    await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+
+
+async def edit_chat_mode_callback_handle(update: Update, context: CallbackContext):
+    await register_user_if_not_exists(update.callback_query, context, update.callback_query.from_user)
+    user_id = update.callback_query.from_user.id
+    chat_modes = db.get_chat_modes(user_id)
+
+    query = update.callback_query
+    await query.answer()
+
+    context.user_data['edit_mode_state'] = "mode_name"
+
+    mode_index_to_edit = int(query.data.split("|")[1])
+    chat_mode_name = chat_modes[mode_index_to_edit]['name']
+    context.user_data['mode_index_to_edit'] = mode_index_to_edit
+
+    if chat_mode_name == "👩‍🎨 Artist":
+        text = f"👩‍🎨 <b>Artist</b> can't be edited or deleted"
+        context.user_data.clear()
+    else:
+        text = f"What is the new <b>name</b> for <b>{chat_mode_name}</b>?"
+
+    await context.bot.send_message(
+        update.callback_query.message.chat.id,
+        text,
+        parse_mode=ParseMode.HTML
+    )
+
+async def edit_chat_mode_content_handle(update: Update, context: CallbackContext):
+    user_id = update.message.from_user.id
+    db.set_user_attribute(user_id, "last_interaction", datetime.now())
+    chat_modes = db.get_chat_modes(user_id)
+    mode_index_to_edit = context.user_data['mode_index_to_edit']
+
+    if context.user_data['edit_mode_state'] is 'mode_name':
+        context.user_data['mode_name'] = update.message.text
+
+        chat_mode_prompt = chat_modes[mode_index_to_edit]['prompt_start']
+
+        text = f"What is the <b>prompt</b> for 👩🏼‍🎓 {context.user_data['mode_name']}? \n\nCurrent prompt:\n<code>{chat_mode_prompt}</code>"
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+        context.user_data['edit_mode_state'] = "mode_prompt"
+        return
+    
+    elif context.user_data['edit_mode_state'] is "mode_prompt":
+        context.user_data['mode_prompt'] = update.message.text
+        
+        edited_chat_mode = {
+            "name": f"👩🏼‍🎓 {context.user_data['mode_name']}",
+            "welcome_message": f"👩🏼‍🎓 Hi, I'm <b>{context.user_data['mode_name']}</b>. How can I help you?",
+            "prompt_start": context.user_data['mode_prompt'],
+            "parse_mode": "html",
+        }
+
+        chat_modes[mode_index_to_edit] = edited_chat_mode
+        db.set_user_attribute(user_id, "chat_modes", chat_modes)
+
+        text = f"👩🏼‍🎓 <b>{context.user_data['mode_name']}</b> has been updated"
+        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+        current_mode_index = db.get_user_attribute(user_id, "current_chat_mode_index")
+        if current_mode_index is mode_index_to_edit:
+            db.start_new_dialog(user_id)
+
+            text = f"{chat_modes[current_mode_index]['welcome_message']}"
+            await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
         context.user_data.clear()
         return
@@ -633,8 +733,8 @@ async def delete_chat_mode_callback_handle(update: Update, context: CallbackCont
     chat_mode_name = chat_modes[chat_mode_index]['name']
     context.user_data['mode_index_to_delete'] = chat_mode_index
 
-    if chat_mode_index is 0:
-        text = f"⛔️ <b>{chat_modes[chat_mode_index]['name']}</b> can't be deleted"
+    if chat_mode_name == "👩‍🎨 Artist":
+        text = f"👩‍🎨 <b>Artist</b> can't be edited or deleted"
         context.user_data.clear()
     else:
         text = f"Send '<b>Yes</b>' to confirm that you want to delete <b>{chat_mode_name}</b>"
@@ -645,6 +745,7 @@ async def delete_chat_mode_callback_handle(update: Update, context: CallbackCont
         parse_mode=ParseMode.HTML
     )
 
+
 async def delete_chat_mode_confirm_handle(update: Update, context: CallbackContext):
     user_id = update.message.from_user.id
     db.set_user_attribute(user_id, "last_interaction", datetime.now())
@@ -652,22 +753,26 @@ async def delete_chat_mode_confirm_handle(update: Update, context: CallbackConte
     chat_mode_delete_index = context.user_data['mode_index_to_delete']
 
     if update.message.text.lower() == "yes":
-        current_mode_index = db.get_user_attribute(user_id, "current_chat_mode_index")
-        if current_mode_index is chat_mode_delete_index:
-            current_mode_index = 0
-            db.set_user_attribute(user_id, "current_chat_mode", chat_modes[current_mode_index]['name'])
-            db.set_user_attribute(user_id, "current_chat_mode_index", current_mode_index)
-            text = f"✅ <b>{chat_modes[chat_mode_delete_index]['name']}</b> is deleted. Switched to <b>{chat_modes[current_mode_index]['name']}</b>"
-        else: 
-            text = f"✅ <b>{chat_modes[chat_mode_delete_index]['name']}</b> is deleted"
-
-        await update.message.reply_text(text, parse_mode=ParseMode.HTML)
-
+        del_name = chat_modes[chat_mode_delete_index]['name']
         del chat_modes[chat_mode_delete_index]
         db.set_user_attribute(user_id, "chat_modes", chat_modes)
 
+        current_mode_index = db.get_user_attribute(user_id, "current_chat_mode_index")
+
         if current_mode_index is chat_mode_delete_index:
+            db.set_user_attribute(user_id, "current_chat_mode", chat_modes[0]['name'])
+            db.set_user_attribute(user_id, "current_chat_mode_index", 0)
+
+            text = f"✅ <b>{del_name}</b> is deleted. Switched to <b>{chat_modes[0]['name']}</b>"
+            await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+
             db.start_new_dialog(user_id)
+
+            text = f"{chat_modes[0]['welcome_message']}"
+            await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+        else: 
+            text = f"✅ <b>{del_name}</b> is deleted"
+            await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
         context.user_data.clear()
         return
@@ -676,6 +781,7 @@ async def delete_chat_mode_confirm_handle(update: Update, context: CallbackConte
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
         context.user_data.clear()
         return
+    
 
 def get_settings_menu(user_id: int):
     current_model = db.get_user_attribute(user_id, "current_model")
@@ -816,6 +922,7 @@ async def post_init(application: Application):
         BotCommand("/new", "start new dialog"),
         BotCommand("/mode", "select a chat mode"),
         BotCommand("/add", "add a chat mode"),
+        BotCommand("/edit", "edit a chat mode"),
         BotCommand("/delete", "delete a chat mode"),
         BotCommand("/retry", "regenerate response for the previous query"),
         BotCommand("/cancel", "cancel the current operation"),
@@ -857,6 +964,8 @@ def run_bot() -> None:
     application.add_handler(CallbackQueryHandler(set_chat_mode_handle, pattern="^set_chat_mode"))
 
     application.add_handler(CommandHandler("add", add_chat_mode_handle, filters=user_filter))
+    application.add_handler(CommandHandler("edit", edit_chat_mode_handle, filters=user_filter))
+    application.add_handler(CallbackQueryHandler(edit_chat_mode_callback_handle, pattern="^edit_chat_mode"))
     application.add_handler(CommandHandler("delete", delete_chat_mode_handle, filters=user_filter))
     application.add_handler(CallbackQueryHandler(delete_chat_mode_callback_handle, pattern="^delete_chat_mode"))
 
