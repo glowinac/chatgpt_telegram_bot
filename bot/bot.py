@@ -455,9 +455,9 @@ def get_chat_mode_menu(user_id: int, page_index: int, action="set_chat_mode"):
     n_chat_modes_per_page = config.n_chat_modes_per_page
     current_mode = db.get_user_attribute(user_id, "current_chat_mode")
     
-    if action is "edit_chat_mode":
+    if action == "edit_chat_mode":
         text = f"Select the <b>chat mode</b> from below to <b>edit</b>"
-    elif action is "delete_chat_mode":
+    elif action == "delete_chat_mode":
         text = f"Select the <b>chat mode</b> from below to <b>delete</b>"
     else: 
         # defalut: set chat mode
@@ -580,7 +580,7 @@ async def add_chat_mode_callback_handle(update: Update, context: CallbackContext
     user_id = update.message.from_user.id
     db.set_user_attribute(user_id, "last_interaction", datetime.now())
 
-    if context.user_data['add_mode_state'] is 'mode_name':
+    if context.user_data['add_mode_state'] == 'mode_name':
         context.user_data['mode_name'] = update.message.text
 
         text = f"What is the <b>prompt</b> for {context.user_data['mode_name']}?"
@@ -589,7 +589,7 @@ async def add_chat_mode_callback_handle(update: Update, context: CallbackContext
         context.user_data['add_mode_state'] = "mode_prompt"
         return
     
-    elif context.user_data['add_mode_state'] is "mode_prompt":
+    elif context.user_data['add_mode_state'] == "mode_prompt":
         context.user_data['mode_prompt'] = update.message.text
         
         chat_modes = db.get_chat_modes(user_id)
@@ -667,7 +667,7 @@ async def edit_chat_mode_content_handle(update: Update, context: CallbackContext
     chat_modes = db.get_chat_modes(user_id)
     mode_index_to_edit = context.user_data['mode_index_to_edit']
 
-    if context.user_data['edit_mode_state'] is 'mode_name':
+    if context.user_data['edit_mode_state'] == 'mode_name':
         context.user_data['mode_name'] = update.message.text
 
         chat_mode_prompt = chat_modes[mode_index_to_edit]['prompt_start']
@@ -678,7 +678,7 @@ async def edit_chat_mode_content_handle(update: Update, context: CallbackContext
         context.user_data['edit_mode_state'] = "mode_prompt"
         return
     
-    elif context.user_data['edit_mode_state'] is "mode_prompt":
+    elif context.user_data['edit_mode_state'] == "mode_prompt":
         context.user_data['mode_prompt'] = update.message.text
         
         edited_chat_mode = {
