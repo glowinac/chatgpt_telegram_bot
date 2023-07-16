@@ -7,7 +7,6 @@ import json
 import tempfile
 import pydub
 import subprocess
-import re
 from pathlib import Path
 from datetime import datetime
 import openai
@@ -374,51 +373,19 @@ async def voice_message_handle(update: Update, context: CallbackContext):
         voice_ogg_path = tmp_dir / "voice.ogg"
 
         # download
-        status = f"\n<i>downloading message</i>"
-        placeholder_text += status
-        await context.bot.edit_message_text(
-            placeholder_text, 
-            chat_id=placeholder_message.chat_id, 
-            message_id=placeholder_message.message_id, 
-            parse_mode=ParseMode.HTML)
-        
         voice_file = await context.bot.get_file(voice.file_id)
         await voice_file.download_to_drive(voice_ogg_path)
 
-        # convert to mp3
-        voice_mp3_path = tmp_dir / "voice.mp3"
-        chunk_size = 20  # Split the audio into chunks of 10 seconds
-        # total_duration = pydub.AudioSegment.open(voice_ogg_path).duration_seconds
-        # total_duration = mutagen.File(voice_ogg_path).info.length # duration in seconds
-        start_time = 0
-        mp3_files = []
-
         # split to small chunks
-        status = f"\n<i>splitting message</i>"
-        placeholder_text += status
-        await context.bot.edit_message_text(
-            placeholder_text, 
-            chat_id=placeholder_message.chat_id, 
-            message_id=placeholder_message.message_id, 
-            parse_mode=ParseMode.HTML)
-        
-        def atoi(text):
-            return int(text) if text.isdigit() else text
-
-        def natural_keys(text):
-            return [ atoi(c) for c in re.split(r'(\d+)', str(text)) ]
-        
+        chunk_size = 20  # chunk size in seconds
         split_path = tmp_dir / "split"
         split_path.mkdir(exist_ok=True)
         subprocess.run(["ffmpeg", "-i", voice_ogg_path, "-f", "segment", "-segment_time", f"{chunk_size}", "-c", "copy", split_path / f"output%03d.ogg"])
 
+        # convert to mp3
         total_count = len([name for name in split_path.glob("*.ogg")])
         processed_count = 0  
-
         combined_audio = pydub.AudioSegment.empty()
-
-        # convert to mp3
-        # for filename in sorted(split_path.iterdir(), key=natural_keys):
         for filename in sorted(split_path.iterdir()):
             if filename.suffix == ".ogg":
                 file_path = split_path / f"{filename}"
@@ -428,88 +395,27 @@ async def voice_message_handle(update: Update, context: CallbackContext):
                 chunk = pydub.AudioSegment.from_file(output_file_path, format='mp3')
                 combined_audio += chunk
                 
+                # update completion ratio
                 processed_count += 1
                 completion = int(processed_count / total_count * 100)
-
-                status = f"\n<i>converting to mp3 {completion}%</i>"
-                placeholder_text_mp3 = placeholder_text + status
+                status = placeholder_text + f"<i> {completion}%</i>"
                 await context.bot.edit_message_text(
-                    placeholder_text_mp3, 
+                    status, 
                     chat_id=placeholder_message.chat_id, 
                     message_id=placeholder_message.message_id, 
                     parse_mode=ParseMode.HTML)
                 
+        voice_mp3_path = tmp_dir / "voice.mp3"
         combined_audio.export(voice_mp3_path, format="mp3")
 
-        # while start_time < total_duration:
-        #     end_time = min(start_time + chunk_size, total_duration)
-        #     chunk = pydub.AudioSegment.from_file(voice_ogg_path)[start_time * 1000:end_time * 1000]
-
-        #     chunk_path = tmp_dir / f"chunk_{start_time}-{end_time}.mp3"
-        #     chunk.export(chunk_path, format="mp3")
-
-        #     mp3_files.append(chunk_path)
-        #     start_time += chunk_size
-
-        #     completion = int(end_time/total_duration * 100)
-        #     status = f"\n<i>converting to mp3 {completion}%</i>"
-        #     placeholder_text_mp3 = placeholder_text + status
-        #     await context.bot.edit_message_text(
-        #         placeholder_text_mp3, 
-        #         chat_id=placeholder_message.chat_id, 
-        #         message_id=placeholder_message.message_id, 
-        #         parse_mode=ParseMode.HTML)
-
-        # Concatenate the individual MP3 files
-        # status = f"\n<i>combining mp3 files</i>"
-        # placeholder_text = placeholder_text_mp3
-        # placeholder_text += status
-        # await context.bot.edit_message_text(
-        #     placeholder_text, 
-        #     chat_id=placeholder_message.chat_id, 
-        #     message_id=placeholder_message.message_id, 
-        #     parse_mode=ParseMode.HTML)
-        
-
-
-        # for filename in tmp_dir.iterdir():
-        #     if filename.suffix == ".mp3":
-        #         chunk = pydub.AudioSegment.from_file(filename, format="mp3")
-        #         combined_audio += chunk
-
-        # for mp3_file in mp3_files:
-            # chunk = pydub.AudioSegment.from_file(mp3_file, format="mp3")
-            # combined_audio += chunk
-
-        # combined_audio.export(voice_mp3_path, format="mp3")
-
         # transcribe
-        status = f"\n<i>transcribing message</i>"
-        placeholder_text = placeholder_text_mp3 + status
-        await context.bot.edit_message_text(
-            placeholder_text, 
-            chat_id=placeholder_message.chat_id, 
-            message_id=placeholder_message.message_id, 
-            parse_mode=ParseMode.HTML)
-        
         with open(voice_mp3_path, "rb") as f:
             transcribed_text = await openai_utils.transcribe_audio(f)
-
-            status = f"\n<i>voice message transcribed</i>"
-            placeholder_text += status
-            await context.bot.edit_message_text(
-                placeholder_text, 
-                chat_id=placeholder_message.chat_id, 
-                message_id=placeholder_message.message_id, 
-                parse_mode=ParseMode.HTML)
-
             if transcribed_text is None:
                  transcribed_text = ""
 
     text = f"🎤: <i>{transcribed_text}</i>"
     await context.bot.edit_message_text(text, chat_id=placeholder_message.chat_id, message_id=placeholder_message.message_id, parse_mode=ParseMode.HTML)
-
-    # await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
     # update n_transcribed_seconds
     db.set_user_attribute(user_id, "n_transcribed_seconds", voice.duration + db.get_user_attribute(user_id, "n_transcribed_seconds"))
