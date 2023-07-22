@@ -318,10 +318,11 @@ async def message_handle(update: Update, context: CallbackContext, message=None,
 
         # send message if some messages were removed from the context
         if n_first_dialog_messages_removed > 0:
+            text = f"\nSend /new to start a new dialog or go to /settings and switch to the <b>ChatGPT-16k</b> model."
             if n_first_dialog_messages_removed == 1:
-                text = "✍️ <i>Note:</i> Your current dialog is too long, so your <b>first message</b> was removed from the context.\nSend /new command to start new dialog"
+                text = "✍️ <i>Note:</i> Your current dialog is too long, so your <b>first message</b> was removed from the context." + text
             else:
-                text = f"✍️ <i>Note:</i> Your current dialog is too long, so <b>{n_first_dialog_messages_removed} first messages</b> were removed from the context.\nSend /new command to start new dialog"
+                text = f"✍️ <i>Note:</i> Your current dialog is too long, so the <b>first {n_first_dialog_messages_removed} messages</b> were removed from the context." + text
             await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
     async with user_semaphores[user_id]:
