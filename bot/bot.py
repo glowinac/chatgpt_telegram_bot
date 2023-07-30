@@ -484,16 +484,16 @@ def get_chat_mode_menu(user_id: int, page_index: int, action="set_chat_mode"):
 
         if is_first_page:
             keyboard.append([
-                InlineKeyboardButton(">>", callback_data=f"show_chat_modes|{page_index + 1}")
+                InlineKeyboardButton(">>", callback_data=f"show_chat_modes|{page_index + 1}|{action}")
             ])
         elif is_last_page:
             keyboard.append([
-                InlineKeyboardButton("<<", callback_data=f"show_chat_modes|{page_index - 1}"),
+                InlineKeyboardButton("<<", callback_data=f"show_chat_modes|{page_index - 1}|{action}"),
             ])
         else:
             keyboard.append([
-                InlineKeyboardButton("<<", callback_data=f"show_chat_modes|{page_index - 1}"),
-                InlineKeyboardButton(">>", callback_data=f"show_chat_modes|{page_index + 1}")
+                InlineKeyboardButton("<<", callback_data=f"show_chat_modes|{page_index - 1}|{action}"),
+                InlineKeyboardButton(">>", callback_data=f"show_chat_modes|{page_index + 1}|{action}")
             ])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -525,10 +525,11 @@ async def show_chat_modes_callback_handle(update: Update, context: CallbackConte
      await query.answer()
 
      page_index = int(query.data.split("|")[1])
+     action = query.data.split("|")[2]
      if page_index < 0:
          return
 
-     text, reply_markup = get_chat_mode_menu(user_id, page_index)
+     text, reply_markup = get_chat_mode_menu(user_id, page_index, action)
      try:
          await query.edit_message_text(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
      except telegram.error.BadRequest as e:
@@ -834,7 +835,7 @@ async def set_settings_handle(update: Update, context: CallbackContext):
 
     _, model_key = query.data.split("|")
     db.set_user_attribute(user_id, "current_model", model_key)
-    db.start_new_dialog(user_id)
+    # db.start_new_dialog(user_id)
 
     text, reply_markup = get_settings_menu(user_id)
     try:
